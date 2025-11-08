@@ -10,9 +10,22 @@
 		0A74F36B2EBB7B3A0076CA43 /* ChatGPTController.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChatGPTController.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0A74F3822EBB81250076CA43 /* Exceptions for "ChatGPTController" folder in "ChatGPTController" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0A74F36A2EBB7B3A0076CA43 /* ChatGPTController */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0A74F36D2EBB7B3A0076CA43 /* ChatGPTController */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0A74F3822EBB81250076CA43 /* Exceptions for "ChatGPTController" folder in "ChatGPTController" target */,
+			);
 			path = ChatGPTController;
 			sourceTree = "<group>";
 		};
@@ -253,6 +266,9 @@
 				DEVELOPMENT_TEAM = 73634654QE;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChatGPTController/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ChatGPTController;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Please permit to use AppleEvent";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -261,7 +277,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.assistsystem.addSerial2plistFile.ChatGPTController;
+				PRODUCT_BUNDLE_IDENTIFIER = com.assistsystem.ChatGPTController;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -280,6 +296,9 @@
 				DEVELOPMENT_TEAM = 73634654QE;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ChatGPTController/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = ChatGPTController;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Please permit to use AppleEvent";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -288,7 +307,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.assistsystem.addSerial2plistFile.ChatGPTController;
+				PRODUCT_BUNDLE_IDENTIFIER = com.assistsystem.ChatGPTController;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;

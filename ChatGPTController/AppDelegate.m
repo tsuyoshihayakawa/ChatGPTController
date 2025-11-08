@@ -5,28 +5,24 @@
 //  Created by 早川強 on 2025/11/05.
 //
 
+// AppDelegate.m
+
 #import "AppDelegate.h"
-
-@interface AppDelegate ()
-
-
-@end
 
 @implementation AppDelegate
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    // Insert code here to initialize your application
-}
 
+// AppDelegate.m (修正後)
+
+- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+    
+}
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
-    // Insert code here to tear down your application
 }
-
 
 - (BOOL)applicationSupportsSecureRestorableState:(NSApplication *)app {
     return YES;
 }
-
 
 @end

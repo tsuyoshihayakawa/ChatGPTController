@@ -15,11 +15,25 @@
 @property (weak) IBOutlet NSTextField *maxTokensField;
 @property (weak) IBOutlet NSTextField *systemMessageField;
 @property (weak) IBOutlet NSTextField *promptField;
+@property (weak) IBOutlet NSTextField *promptSuffixField;
 @property (weak) IBOutlet NSButton *sendButton;
 @property (unsafe_unretained) IBOutlet NSTextView *resultView;
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *history;
 @property (weak) IBOutlet NSTableView *historyTable;
 @property (weak) IBOutlet NSProgressIndicator *loadingIndicator;
+
+// MARK: - ChatGPT API関連
+- (void)runChatWithPrompt:(NSString *)prompt completion:(void (^)(NSString *result))completion;
+- (void)sendPromptToChatGPT:(NSString *)prompt completion:(void (^)(NSString *response))completion;
+
+// MARK: - 履歴処理
+- (void)appendToHistoryWithPrompt:(NSString *)prompt response:(NSString *)response;
+- (void)saveHistoryWithPrompt:(NSString *)prompt response:(NSString *)response;
+
+// MARK: - ファイル処理／逐次実行
+- (IBAction)loadPromptFileAndExecute:(id)sender;
+- (void)executePromptsFromFile:(NSURL *)fileURL;
+- (void)runSequentialPrompts:(NSArray<NSString *> *)prompts currentIndex:(NSInteger)index;
 
 - (IBAction)sendToChatGPT:(id)sender;
 - (IBAction)newEntry:(id)sender;

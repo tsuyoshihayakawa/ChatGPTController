@@ -324,8 +324,10 @@
                             <textField focusRingType="none" verticalHuggingPriority="750" fixedFrame="YES" translatesAutoresizingMaskIntoConstraints="NO" id="vl3-V2-nyn">
                                 <rect key="frame" x="133" y="216" width="286" height="68"/>
                                 <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
-                                <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="bezel" alignment="justified" drawsBackground="YES" id="fBe-aZ-sQS">
+                                <textFieldCell key="cell" selectable="YES" editable="YES" sendsActionOnEndEditing="YES" borderStyle="bezel" alignment="justified" drawsBackground="YES" id="fBe-aZ-sQS">
                                     <font key="font" usesAppearanceFont="YES"/>
+                                    <string key="placeholderString">プロンプトを入力する。
+バッチ処理時はこの文章の前に、ファイルから読み込まれた単語が「〜について、」のような形で追加される。</string>
                                     <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
                                     <color key="backgroundColor" name="textBackgroundColor" catalog="System" colorSpace="catalog"/>
                                 </textFieldCell>
@@ -408,7 +410,7 @@
                                     </subviews>
                                 </clipView>
                                 <scroller key="horizontalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="YES" id="PAd-tE-Xaa">
-                                    <rect key="frame" x="1" y="357" width="251" height="16"/>
+                                    <rect key="frame" x="1" y="367" width="251" height="16"/>
                                     <autoresizingMask key="autoresizingMask"/>
                                 </scroller>
                                 <scroller key="verticalScroller" hidden="YES" wantsLayer="YES" verticalHuggingPriority="750" horizontal="NO" id="mtJ-EE-Gn0">

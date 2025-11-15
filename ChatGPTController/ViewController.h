@@ -18,6 +18,7 @@
 @property (weak) IBOutlet NSTextField *promptSuffixField;
 @property (weak) IBOutlet NSButton *sendButton;
 @property (unsafe_unretained) IBOutlet NSTextView *resultView;
+@property (unsafe_unretained) IBOutlet NSTextView *historyTextView;
 @property (nonatomic, strong) NSMutableArray<NSDictionary *> *history;
 @property (weak) IBOutlet NSTableView *historyTable;
 @property (weak) IBOutlet NSProgressIndicator *loadingIndicator;
@@ -31,6 +32,7 @@
 - (void)saveHistoryWithPrompt:(NSString *)prompt response:(NSString *)response;
 
 // MARK: - ファイル処理／逐次実行
+- (IBAction)loadFolderAndExecute:(id)sender;
 - (IBAction)loadPromptFileAndExecute:(id)sender;
 - (void)executePromptsFromFile:(NSURL *)fileURL;
 - (void)runSequentialPrompts:(NSArray<NSString *> *)prompts currentIndex:(NSInteger)index;
@@ -39,6 +41,8 @@
 - (IBAction)newEntry:(id)sender;
 - (IBAction)duplicateEntry:(id)sender;
 #pragma mark - 保存／読み込み／書き出し
+
+- (void)appendHistory:(NSString *)text;
 
 // 🔹 「名前をつけて保存」(plist)
 - (IBAction)saveHistoryAs:(id)sender;

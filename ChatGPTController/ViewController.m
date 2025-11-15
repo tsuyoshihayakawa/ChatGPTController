@@ -6,7 +6,7 @@
 //
 
 #import "ViewController.h"
-#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>  // ←これをファイル冒頭に追加
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @interface ViewController ()
 @property (strong) NSWindow *progressWindow;
@@ -17,71 +17,69 @@
 
 @implementation ViewController
 
+#pragma mark - Lifecycle
+
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    // 🔹 起動時に保存されたAPIキーを読み込む
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSString *savedKey = [defaults stringForKey:@"OpenAI_API_Key"];
-    if (savedKey) {
-        self.apiKeyField.stringValue = savedKey;
-    }
-    
+    // 保存された API キーを復元
+    NSString *savedKey = [[NSUserDefaults standardUserDefaults] stringForKey:@"OpenAI_API_Key"];
+    if (savedKey) self.apiKeyField.stringValue = savedKey;
+
+    // 初期値
     self.modelField.stringValue = @"gpt-4o-mini";
     self.temperatureField.stringValue = @"0.7";
     self.maxTokensField.stringValue = @"512";
     self.systemMessageField.stringValue = @"あなたは有能なアシスタントです。";
-    
+
     self.history = [NSMutableArray array];
     self.historyTable.delegate = self;
     self.historyTable.dataSource = self;
 
-    // テーブルのカラム設定（Storyboardで設定している場合は不要）
     NSTableColumn *col = [self.historyTable tableColumnWithIdentifier:@"PromptColumn"];
     col.title = @"履歴";
 }
 
-
 - (void)setRepresentedObject:(id)representedObject {
     [super setRepresentedObject:representedObject];
-
-    // Update the view, if already loaded.
 }
 
+#pragma mark - ChatGPT API (Single Prompt)
+
 - (IBAction)sendToChatGPT:(id)sender {
+
     NSString *apiKey = self.apiKeyField.stringValue;
     if (apiKey.length == 0) {
-        self.resultView.string = @"APIキーを入力してください。";
+        self.historyTextView.string = @"APIキーを入力してください。\n";
         return;
     }
 
-    // 🔹 ボタンを無効化＆インジケータ開始
+    // UI 状態
     self.sendButton.enabled = NO;
     [self.loadingIndicator startAnimation:nil];
-    self.resultView.string = @"処理中...";
-    
-    // 🔹 APIキーを保存
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    [defaults setObject:apiKey forKey:@"OpenAI_API_Key"];
-    [defaults synchronize];
+    self.historyTextView.string = @"処理中...\n";
 
-    NSString *model = self.modelField.stringValue.length > 0 ? self.modelField.stringValue : @"gpt-4o-mini";
-    NSString *temperatureStr = self.temperatureField.stringValue.length > 0 ? self.temperatureField.stringValue : @"0.7";
-    NSString *maxTokensStr = self.maxTokensField.stringValue.length > 0 ? self.maxTokensField.stringValue : @"512";
-    NSString *systemMessage = self.systemMessageField.stringValue.length > 0 ? self.systemMessageField.stringValue : @"あなたは有能なアシスタントです。";
+    // API キー保存
+    [[NSUserDefaults standardUserDefaults] setObject:apiKey forKey:@"OpenAI_API_Key"];
+
+    NSString *model = self.modelField.stringValue.length ? self.modelField.stringValue : @"gpt-4o-mini";
+    NSString *temperatureStr = self.temperatureField.stringValue.length ? self.temperatureField.stringValue : @"0.7";
+    NSString *maxTokensStr = self.maxTokensField.stringValue.length ? self.maxTokensField.stringValue : @"512";
+    NSString *systemMessage = self.systemMessageField.stringValue.length ? self.systemMessageField.stringValue : @"あなたは有能なアシスタントです。";
     NSString *prompt = self.promptField.stringValue;
 
-    if (apiKey.length == 0 || prompt.length == 0) {
-        self.resultView.string = @"APIキーとプロンプトを入力してください。";
+    if (prompt.length == 0) {
+        self.historyTextView.string = @"プロンプトを入力してください。\n";
         return;
     }
 
-    float temperature = [temperatureStr floatValue];
-    NSInteger maxTokens = [maxTokensStr integerValue];
+    float temperature = temperatureStr.floatValue;
+    NSInteger maxTokens = maxTokensStr.integerValue;
 
     NSURL *url = [NSURL URLWithString:@"https://api.openai.com/v1/chat/completions"];
+
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-    [request setHTTPMethod:@"POST"];
+    request.HTTPMethod = @"POST";
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
     [request setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
 
@@ -94,63 +92,64 @@
             @{@"role": @"user", @"content": prompt}
         ]
     };
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
-    [request setHTTPBody:jsonData];
 
-    NSURLSession *session = [NSURLSession sharedSession];
-    NSURLSessionDataTask *task = [session dataTaskWithRequest:request
-                                            completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+    request.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+
+    NSURLSessionDataTask *task =
+    [[NSURLSession sharedSession] dataTaskWithRequest:request
+                                    completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+
         dispatch_async(dispatch_get_main_queue(), ^{
-            // 🔹 インジケータ停止＆ボタン有効化
             [self.loadingIndicator stopAnimation:nil];
             self.sendButton.enabled = YES;
 
             if (error) {
-                self.resultView.string = [NSString stringWithFormat:@"エラー: %@", error.localizedDescription];
+                self.historyTextView.string = [NSString stringWithFormat:@"エラー: %@\n", error.localizedDescription];
                 return;
             }
 
-            NSLog(@"Request URL: %@", url);
-            NSLog(@"Headers: %@", request.allHTTPHeaderFields);
-            
             NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-            NSString *content = json[@"choices"][0][@"message"][@"content"];
-            if (!content) content = @"応答なし";
+            NSString *content = json[@"choices"][0][@"message"][@"content"] ?: @"応答なし";
+
             self.resultView.string = content;
-            
+
             NSDictionary *entry = @{
                 @"prompt": prompt,
-                @"response": content ?: @"",
+                @"response": content,
                 @"model": model,
                 @"temperature": temperatureStr,
                 @"max_tokens": maxTokensStr,
                 @"system": systemMessage
             };
+
             [self.history addObject:entry];
             [self.historyTable reloadData];
         });
     }];
+
     [task resume];
 }
 
-// MARK: - ChatGPT非同期API呼び出し汎用メソッド
-- (void)runChatWithPrompt:(NSString *)prompt completion:(void (^)(NSString *result))completion {
+#pragma mark - Chat API Core
+
+- (void)runChatWithPrompt:(NSString *)prompt completion:(void (^)(NSString *))completion {
+
     NSString *apiKey = self.apiKeyField.stringValue;
-    if (apiKey.length == 0) {
-        if (completion) completion(@"APIキーが設定されていません");
+    if (!apiKey.length) {
+        completion(@"APIキーが設定されていません");
         return;
     }
 
-    NSString *model = self.modelField.stringValue.length > 0 ? self.modelField.stringValue : @"gpt-4o-mini";
-    float temperature = self.temperatureField.stringValue.length > 0 ? [self.temperatureField.stringValue floatValue] : 0.7;
-    NSInteger maxTokens = self.maxTokensField.stringValue.length > 0 ? [self.maxTokensField.stringValue integerValue] : 512;
-    NSString *systemMessage = self.systemMessageField.stringValue.length > 0 ? self.systemMessageField.stringValue : @"あなたは有能なアシスタントです。";
+    NSString *model = self.modelField.stringValue ?: @"gpt-4o-mini";
+    float temperature = self.temperatureField.stringValue.floatValue ?: 0.7;
+    NSInteger maxTokens = self.maxTokensField.stringValue.integerValue ?: 512;
+    NSString *systemMessage = self.systemMessageField.stringValue ?: @"あなたは有能なアシスタントです。";
 
     NSURL *url = [NSURL URLWithString:@"https://api.openai.com/v1/chat/completions"];
-    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
-    [request setHTTPMethod:@"POST"];
-    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-    [request setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    req.HTTPMethod = @"POST";
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    [req setValue:[NSString stringWithFormat:@"Bearer %@", apiKey] forHTTPHeaderField:@"Authorization"];
 
     NSDictionary *body = @{
         @"model": model,
@@ -162,33 +161,41 @@
         ]
     };
 
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
-    [request setHTTPBody:jsonData];
+    req.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
 
-    NSURLSession *session = [NSURLSession sharedSession];
-    NSURLSessionDataTask *task = [session dataTaskWithRequest:request
-                                            completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+    NSURLSessionDataTask *task =
+    [[NSURLSession sharedSession] dataTaskWithRequest:req
+                                    completionHandler:^(NSData *data, NSURLResponse *res, NSError *error) {
+
         if (error) {
-            if (completion) completion([NSString stringWithFormat:@"エラー: %@", error.localizedDescription]);
+            completion([NSString stringWithFormat:@"エラー: %@", error.localizedDescription]);
             return;
         }
 
         NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-        NSString *content = json[@"choices"][0][@"message"][@"content"];
-        if (!content) content = @"応答なし";
+        NSString *content = json[@"choices"][0][@"message"][@"content"] ?: @"応答なし";
 
-        if (completion) completion(content);
+        completion(content);
     }];
     [task resume];
 }
 
 - (NSString *)runChatSynchronouslyWithPrompt:(NSString *)prompt {
-    NSLog(@"[ViewController] runChatSynchronouslyWithPrompt: %@", prompt);
-    // 実際のAPI呼び出し前の動作確認用
-    return [NSString stringWithFormat:@"Echo: %@", prompt];
+
+    dispatch_semaphore_t sema = dispatch_semaphore_create(0);
+    __block NSString *result = nil;
+
+    [self runChatWithPrompt:prompt completion:^(NSString *response) {
+        result = response;
+        dispatch_semaphore_signal(sema);
+    }];
+
+    dispatch_semaphore_wait(sema, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+
+    return result ?: @"(no response)";
 }
 
-#pragma IBAction ==================================
+#pragma mark - Entry Operations
 
 - (IBAction)newEntry:(id)sender {
     self.promptField.stringValue = @"";
@@ -198,7 +205,6 @@
     self.maxTokensField.stringValue = @"512";
     self.systemMessageField.stringValue = @"あなたは有能なアシスタントです。";
     [self.historyTable deselectAll:nil];
-    self.resultView.string = @"";
 }
 
 - (IBAction)duplicateEntry:(id)sender {
@@ -207,51 +213,44 @@
 
     NSDictionary *entry = self.history[row];
     NSMutableDictionary *copy = [entry mutableCopy];
+
     [self.history addObject:copy];
     [self.historyTable reloadData];
-
     [self.historyTable selectRowIndexes:[NSIndexSet indexSetWithIndex:self.history.count - 1]
                    byExtendingSelection:NO];
 }
 
-#pragma mark - 保存／読み込み／書き出し
+#pragma mark - History File I/O
 
-// 🔹 「名前をつけて保存」(plist)
 - (IBAction)saveHistoryAs:(id)sender {
     NSSavePanel *panel = [NSSavePanel savePanel];
     panel.allowedContentTypes = @[[UTType typeWithIdentifier:@"com.apple.property-list"]];
     panel.nameFieldStringValue = @"ChatGPT_History.plist";
-    [panel beginWithCompletionHandler:^(NSModalResponse result) {
-        if (result == NSModalResponseOK) {
-            NSURL *url = panel.URL;
-            [self.history writeToURL:url atomically:YES];
-            NSLog(@"✅ 保存: %@", url.path);
-        }
+
+    [panel beginWithCompletionHandler:^(NSModalResponse r) {
+        if (r == NSModalResponseOK)
+            [self.history writeToURL:panel.URL atomically:YES];
     }];
 }
 
-// 🔹 「読み込み」（plist）
 - (IBAction)openHistoryFile:(id)sender {
     NSOpenPanel *panel = [NSOpenPanel openPanel];
     panel.allowedContentTypes = @[[UTType typeWithIdentifier:@"com.apple.property-list"]];
-    [panel beginWithCompletionHandler:^(NSModalResponse result) {
-        if (result == NSModalResponseOK) {
-            NSURL *url = panel.URL;
-            NSArray *loaded = [NSArray arrayWithContentsOfURL:url];
+
+    [panel beginWithCompletionHandler:^(NSModalResponse r) {
+        if (r == NSModalResponseOK) {
+            NSArray *loaded = [NSArray arrayWithContentsOfURL:panel.URL];
             if (loaded) {
                 self.history = [loaded mutableCopy];
                 [self.historyTable reloadData];
-                NSLog(@"📂 読み込み: %@", url.path);
-            } else {
-                NSLog(@"⚠️ 読み込み失敗: %@", url.path);
             }
         }
     }];
 }
 
 - (IBAction)exportHistoryAsText:(id)sender {
-    NSSavePanel *panel = [NSSavePanel savePanel];
 
+    NSSavePanel *panel = [NSSavePanel savePanel];
     if (@available(macOS 12.0, *)) {
         panel.allowedContentTypes = @[[UTType typeWithIdentifier:@"public.comma-separated-values-text"]];
     } else {
@@ -260,50 +259,33 @@
 
     panel.nameFieldStringValue = @"ChatGPT_History.csv";
 
-    [panel beginWithCompletionHandler:^(NSModalResponse result) {
-        if (result == NSModalResponseOK) {
+    [panel beginWithCompletionHandler:^(NSModalResponse r) {
+        if (r != NSModalResponseOK) return;
 
-            NSMutableString *output = [NSMutableString string];
+        NSMutableString *output = [NSMutableString string];
+        [output appendString:@"\"Prompt\"\t\"Response\"\t\"Model\"\t\"Temperature\"\t\"MaxTokens\"\n"];
 
-            // 🔹 ヘッダー
-            [output appendString:@"\"Prompt\"\t\"Response\"\t\"Model\"\t\"Temperature\"\t\"MaxTokens\"\n"];
+        for (NSDictionary *entry in self.history) {
 
-            for (NSDictionary *entry in self.history) {
-                NSString *(^escape)(NSString *) = ^NSString *(NSString *text) {
-                    if (!text) return @"";
-                    // ダブルクォートは "" に置換（CSV規格）
-                    NSString *escaped = [text stringByReplacingOccurrencesOfString:@"\"" withString:@"\"\""];
-                    return [NSString stringWithFormat:@"\"%@\"", escaped];
-                };
+            NSString *(^escape)(NSString *) = ^NSString *(NSString *text) {
+                if (!text) return @"";
+                NSString *e = [text stringByReplacingOccurrencesOfString:@"\"" withString:@"\"\""];
+                return [NSString stringWithFormat:@"\"%@\"", e];
+            };
 
-                NSString *prompt = escape(entry[@"prompt"]);
-                NSString *response = escape(entry[@"response"]);
-                NSString *model = escape(entry[@"model"]);
-                NSString *temp = escape([NSString stringWithFormat:@"%@", entry[@"temperature"] ?: @""]);
-                NSString *max = escape([NSString stringWithFormat:@"%@", entry[@"max_tokens"] ?: @""]);
-
-                // タブ区切り＋行末改行
-                NSString *line = [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\n",
-                                  prompt, response, model, temp, max];
-                [output appendString:line];
-            }
-
-            // BOM付きUTF-8（Excel文字化け対策）
-            NSURL *url = panel.URL;
-            NSData *bom = [@"\uFEFF" dataUsingEncoding:NSUTF8StringEncoding];
-            NSData *data = [output dataUsingEncoding:NSUTF8StringEncoding];
-            NSMutableData *finalData = [NSMutableData dataWithData:bom];
-            [finalData appendData:data];
-
-            NSError *error = nil;
-            BOOL success = [finalData writeToURL:url options:NSDataWritingAtomic error:&error];
-
-            if (success) {
-                NSLog(@"✅ 書き出し成功: %@", url.path);
-            } else {
-                NSLog(@"❌ 書き出し失敗: %@", error.localizedDescription);
-            }
+            [output appendFormat:@"%@\t%@\t%@\t%@\t%@\n",
+             escape(entry[@"prompt"]),
+             escape(entry[@"response"]),
+             escape(entry[@"model"]),
+             escape([NSString stringWithFormat:@"%@", entry[@"temperature"]]),
+             escape([NSString stringWithFormat:@"%@", entry[@"max_tokens"]])
+            ];
         }
+
+        // BOM 付 UTF-8
+        NSMutableData *final = [NSMutableData dataWithData:[@"\uFEFF" dataUsingEncoding:NSUTF8StringEncoding]];
+        [final appendData:[output dataUsingEncoding:NSUTF8StringEncoding]];
+        [final writeToURL:panel.URL atomically:YES];
     }];
 }
 
@@ -315,151 +297,229 @@
     }
 }
 
+#pragma mark - Folder Batch Execute
 
-// MARK: - ファイル選択して逐次実行（macOS用）
-- (IBAction)loadPromptFileAndExecute:(id)sender {
-    NSString *apiKey = self.apiKeyField.stringValue;
-    if (apiKey.length == 0) {
-        self.resultView.string = @"APIキーを入力してください。";
-        return;
-    }
-    // 🔹 APIキーを保存
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    [defaults setObject:apiKey forKey:@"OpenAI_API_Key"];
-    [defaults synchronize];
+- (IBAction)loadFolderAndExecute:(id)sender {
 
     NSOpenPanel *panel = [NSOpenPanel openPanel];
-    panel.allowedFileTypes = @[@"txt", @"text", @"public.plain-text"];
-    panel.allowsMultipleSelection = NO;
-    panel.canChooseDirectories = NO;
+    panel.canChooseDirectories = YES;
+    panel.canChooseFiles = NO;
 
-    [panel beginWithCompletionHandler:^(NSModalResponse result) {
-        if (result == NSModalResponseOK) {
-            NSURL *fileURL = panel.URL;
-            if (fileURL) {
-                [self executePromptsFromFile:fileURL];
-            }
-        }
+    [panel beginWithCompletionHandler:^(NSModalResponse r) {
+        if (r != NSModalResponseOK) return;
+
+        NSURL *folderURL = panel.URL;
+
+        // 保存先フォルダ選択
+        NSOpenPanel *savePanel = [NSOpenPanel openPanel];
+        savePanel.canChooseDirectories = YES;
+        savePanel.canChooseFiles = NO;
+        savePanel.canCreateDirectories = YES;
+        savePanel.title = @"保存先フォルダを選んでください";
+
+        [savePanel beginWithCompletionHandler:^(NSModalResponse r2) {
+            if (r2 == NSModalResponseOK)
+                [self processFolderBatch:folderURL saveTo:savePanel.URL];
+        }];
     }];
 }
 
-// MARK: - テキストファイルを逐次実行
-- (void)executePromptsFromFile:(NSURL *)fileURL {
-    NSError *error = nil;
-    NSString *fileContents = [NSString stringWithContentsOfURL:fileURL encoding:NSUTF8StringEncoding error:&error];
-    if (error) {
-        NSLog(@"ファイル読み込みエラー: %@", error.localizedDescription);
+- (void)processFolderBatch:(NSURL *)folderURL saveTo:(NSURL *)saveURL {
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+
+        __strong typeof(self) strongSelf = self;
+        if (!strongSelf) return;
+
+        // UI値（prompt）を取得
+        __block NSString *userPromptTemplate = @"";
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            userPromptTemplate = [strongSelf.promptField.stringValue copy];
+        });
+
+        // フォルダから txt を取得
+        NSError *err = nil;
+        NSArray *files =
+        [[NSFileManager defaultManager] contentsOfDirectoryAtURL:folderURL
+                                       includingPropertiesForKeys:nil
+                                                          options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                            error:&err];
+
+        if (err || !files.count) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                strongSelf.historyTextView.string = @"フォルダ内にファイルがありません。\n";
+            });
+            return;
+        }
+
+        NSPredicate *pred = [NSPredicate predicateWithFormat:@"pathExtension=='txt'"];
+        files = [files filteredArrayUsingPredicate:pred];
+
+        if (!files.count) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                strongSelf.historyTextView.string = @"フォルダに txt ファイルがありません。\n";
+            });
+            return;
+        }
+
+        // 進捗ダイアログ
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [strongSelf showProgressDialogWithTotal:files.count];
+        });
+
+        // 各ファイル処理
+        NSInteger index = 0;
+
+        for (NSURL *fileURL in files) {
+
+            if (strongSelf.shouldCancelBatch) break;
+
+            NSError *readErr = nil;
+            NSString *content = [NSString stringWithContentsOfURL:fileURL
+                                                          encoding:NSUTF8StringEncoding
+                                                             error:&readErr];
+
+            if (!content.length) {
+                [strongSelf appendBatchLog:[NSString stringWithFormat:@"空ファイル: %@", fileURL.lastPathComponent]];
+                index++;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [strongSelf.progressIndicator setDoubleValue:index];
+                });
+                continue;
+            }
+
+            NSString *finalPrompt =
+            userPromptTemplate.length ?
+            [NSString stringWithFormat:@"%@\n%@", userPromptTemplate, content]
+            : content;
+
+            NSString *response = [strongSelf runChatSynchronouslyWithPrompt:finalPrompt];
+
+            [strongSelf saveHistoryWithPrompt:finalPrompt response:response];
+
+            NSURL *outURL = [saveURL URLByAppendingPathComponent:fileURL.lastPathComponent];
+            NSError *saveErr = nil;
+
+            BOOL ok = [response writeToURL:outURL
+                                atomically:YES
+                                  encoding:NSUTF8StringEncoding
+                                     error:&saveErr];
+
+            if (!ok || saveErr) {
+                [strongSelf appendBatchLog:[NSString stringWithFormat:@"保存失敗: %@", fileURL.lastPathComponent]];
+            } else {
+                [strongSelf appendBatchLog:[NSString stringWithFormat:@"保存完了: %@", fileURL.lastPathComponent]];
+            }
+
+            index++;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [strongSelf.progressIndicator setDoubleValue:index];
+            });
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [strongSelf.view.window endSheet:strongSelf.progressWindow];
+            strongSelf.progressWindow = nil;
+        });
+    });
+}
+
+- (void)appendBatchLog:(NSString *)msg {
+    if (!self.historyTextView) return;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.historyTextView.string =
+        [self.historyTextView.string stringByAppendingFormat:@"%@\n", msg];
+
+        [self.historyTextView scrollRangeToVisible:
+         NSMakeRange(self.historyTextView.string.length, 0)];
+    });
+}
+
+#pragma mark - Text File (One-by-One Prompts)
+
+- (IBAction)loadPromptFileAndExecute:(id)sender {
+
+    NSString *apiKey = self.apiKeyField.stringValue;
+    if (!apiKey.length) {
+        self.historyTextView.string = @"APIキーを入力してください。\n";
         return;
     }
 
-    NSArray<NSString *> *lines = [fileContents componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-    NSMutableArray<NSString *> *prompts = [NSMutableArray array];
-    NSString *suffix = self.promptField.stringValue.length > 0 ? self.promptField.stringValue : @"教えて";
+    [[NSUserDefaults standardUserDefaults] setObject:apiKey forKey:@"OpenAI_API_Key"];
+
+    NSOpenPanel *panel = [NSOpenPanel openPanel];
+    panel.allowedFileTypes = @[@"txt", @"text", @"public.plain-text"];
+
+    [panel beginWithCompletionHandler:^(NSModalResponse r) {
+        if (r == NSModalResponseOK)
+            [self executePromptsFromFile:panel.URL];
+    }];
+}
+
+- (void)executePromptsFromFile:(NSURL *)fileURL {
+
+    NSError *err = nil;
+    NSString *contents = [NSString stringWithContentsOfURL:fileURL
+                                                  encoding:NSUTF8StringEncoding
+                                                     error:&err];
+
+    if (err) {
+        NSLog(@"ファイル読み込みエラー: %@", err.localizedDescription);
+        return;
+    }
+
+    NSArray *lines = [contents componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
+    NSMutableArray *prompts = [NSMutableArray array];
+
+    NSString *suffix = self.promptField.stringValue.length ? self.promptField.stringValue : @"教えて";
+
     for (NSString *line in lines) {
         NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (trimmed.length > 0) {
-            NSString *fullPrompt = [NSString stringWithFormat:@"%@について、%@",
-                                    trimmed, suffix ?: @"教えて"];
-            [prompts addObject:fullPrompt];
+        if (trimmed.length) {
+            NSString *full = [NSString stringWithFormat:@"%@について、%@", trimmed, suffix];
+            [prompts addObject:full];
         }
     }
 
     [self runSequentialPrompts:prompts currentIndex:0];
 }
 
-// MARK: - 進捗ダイアログを表示
-- (void)showProgressDialogWithTotal:(NSInteger)totalCount {
-    self.shouldCancelBatch = NO;
-
-    NSRect frame = NSMakeRect(0, 0, 400, 120);
-    self.progressWindow = [[NSWindow alloc] initWithContentRect:frame
-                                                      styleMask:(NSWindowStyleMaskTitled)
-                                                        backing:NSBackingStoreBuffered
-                                                          defer:NO];
-    [self.progressWindow setTitle:@"バッチ実行中"];
-    [self.progressWindow center];
-
-    NSView *content = self.progressWindow.contentView;
-
-    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 70, 360, 20)];
-    [label setStringValue:@"ChatGPTに順次問い合わせ中..."];
-    [label setBezeled:NO];
-    [label setEditable:NO];
-    [label setDrawsBackground:NO];
-    [content addSubview:label];
-
-    self.progressIndicator = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 40, 360, 20)];
-    [self.progressIndicator setIndeterminate:NO];
-    [self.progressIndicator setMinValue:0];
-    [self.progressIndicator setMaxValue:totalCount];
-    [self.progressIndicator setDoubleValue:0];
-    [self.progressIndicator setStyle:NSProgressIndicatorStyleBar];
-    [content addSubview:self.progressIndicator];
-
-    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(150, 5, 100, 30)];
-    [self.cancelButton setTitle:@"キャンセル"];
-    [self.cancelButton setBezelStyle:NSBezelStyleRounded];
-    [self.cancelButton setTarget:self];
-    [self.cancelButton setAction:@selector(cancelBatchProcess)];
-    [content addSubview:self.cancelButton];
-
-    NSWindow *mainWindow = self.view.window;
-    [mainWindow beginSheet:self.progressWindow completionHandler:nil];
-}
-
-// MARK: - キャンセル処理
-- (void)cancelBatchProcess {
-    self.shouldCancelBatch = YES;
-    [self.view.window endSheet:self.progressWindow];
-    self.progressWindow = nil;
-}
-
-// MARK: - 進捗バー更新
-- (void)updateProgress:(NSInteger)current total:(NSInteger)total {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self.progressIndicator setDoubleValue:current];
-    });
-}
-
-// MARK: - ChatGPT API を逐次実行（非同期処理）
-// MARK: - バッチ処理部分の改修
 - (void)runSequentialPrompts:(NSArray<NSString *> *)prompts currentIndex:(NSInteger)index {
-    if (index == 0) {
+
+    if (index == 0)
         [self showProgressDialogWithTotal:prompts.count];
-    }
 
     if (self.shouldCancelBatch || index >= prompts.count) {
         [self.view.window endSheet:self.progressWindow];
         self.progressWindow = nil;
-        NSLog(@"全てのプロンプトを処理しました");
         return;
     }
 
     NSString *prompt = prompts[index];
-    NSLog(@"実行中: %@", prompt);
 
     [self sendPromptToChatGPT:prompt completion:^(NSString *response) {
         [self appendToHistoryWithPrompt:prompt response:response];
         [self updateProgress:index + 1 total:prompts.count];
 
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1.5 * NSEC_PER_SEC),
                        dispatch_get_main_queue(), ^{
             [self runSequentialPrompts:prompts currentIndex:index + 1];
         });
     }];
 }
 
-// MARK: - ChatGPT API呼び出し（既存のAPI呼び出しラッパを利用）
+// ⚠️ runChatWithPrompt と完全に役割重複（不要の可能性）
 - (void)sendPromptToChatGPT:(NSString *)prompt completion:(void (^)(NSString *response))completion {
-    // ここは既存のChatGPT呼び出し部分をラップする
-    // 例: [self runChatWithPrompt:prompt completion:completion];
     [self runChatWithPrompt:prompt completion:^(NSString *result) {
-        if (completion) completion(result ?: @"(no response)");
+        completion(result ?: @"(no response)");
     }];
 }
 
-// MARK: - 履歴保存の共通メソッド
+#pragma mark - History Handling
+
 - (void)saveHistoryWithPrompt:(NSString *)prompt response:(NSString *)response {
+
     if (!prompt || !response) return;
 
     NSDictionary *entry = @{
@@ -478,44 +538,114 @@
     });
 }
 
-// MARK: - 履歴に追加（既存のメソッド）
 - (void)appendToHistoryWithPrompt:(NSString *)prompt response:(NSString *)response {
-    // 既に実装済みの履歴保存処理を呼ぶ
     [self saveHistoryWithPrompt:prompt response:response];
 }
 
-#pragma TableViewDataSource,Delegate########################
+// ⚠️ appendBatchLog の下位互換？ 不要の可能性
+- (void)appendHistory:(NSString *)text {
+    if (!self.historyTextView) return;
+
+    self.historyTextView.string =
+    [self.historyTextView.string stringByAppendingFormat:@"%@\n", text];
+
+    [self.historyTextView scrollRangeToVisible:
+     NSMakeRange(self.historyTextView.string.length, 0)];
+}
+
+#pragma mark - Batch Progress UI
+
+- (void)showProgressDialogWithTotal:(NSInteger)totalCount {
+
+    self.shouldCancelBatch = NO;
+
+    NSRect frame = NSMakeRect(0, 0, 400, 120);
+    self.progressWindow =
+    [[NSWindow alloc] initWithContentRect:frame
+                                styleMask:NSWindowStyleMaskTitled
+                                  backing:NSBackingStoreBuffered
+                                    defer:NO];
+
+    self.progressWindow.title = @"バッチ実行中";
+    [self.progressWindow center];
+
+    NSView *content = self.progressWindow.contentView;
+
+    NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 70, 360, 20)];
+    label.stringValue = @"ChatGPTに順次問い合わせ中...";
+    label.bezeled = NO;
+    label.editable = NO;
+    label.drawsBackground = NO;
+    [content addSubview:label];
+
+    self.progressIndicator =
+    [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 40, 360, 20)];
+    self.progressIndicator.indeterminate = NO;
+    self.progressIndicator.minValue = 0;
+    self.progressIndicator.maxValue = totalCount;
+    self.progressIndicator.doubleValue = 0;
+    self.progressIndicator.style = NSProgressIndicatorStyleBar;
+    [content addSubview:self.progressIndicator];
+
+    self.cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(150, 5, 100, 30)];
+    self.cancelButton.title = @"キャンセル";
+    self.cancelButton.bezelStyle = NSBezelStyleRounded;
+    self.cancelButton.target = self;
+    self.cancelButton.action = @selector(cancelBatchProcess);
+    [content addSubview:self.cancelButton];
+
+    [self.view.window beginSheet:self.progressWindow completionHandler:nil];
+}
+
+- (void)cancelBatchProcess {
+    self.shouldCancelBatch = YES;
+    [self.view.window endSheet:self.progressWindow];
+    self.progressWindow = nil;
+}
+
+- (void)updateProgress:(NSInteger)current total:(NSInteger)total {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.progressIndicator.doubleValue = current;
+    });
+}
+
+#pragma mark - NSTextField Delegate
+
+- (void)controlTextDidBeginEditing:(NSNotification *)obj {
+    if (obj.object == self.apiKeyField)
+        self.apiKeyField.stringValue = @"";
+}
+
+#pragma mark - TableView DataSource & Delegate
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView {
     return self.history.count;
 }
 
-- (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {
+- (id)tableView:(NSTableView *)tableView objectValueForTableColumn:(NSTableColumn *)column row:(NSInteger)row {
+
     NSDictionary *entry = self.history[row];
     NSString *prompt = entry[@"prompt"];
-    if (prompt.length > 40) {
+
+    if (prompt.length > 40)
         prompt = [[prompt substringToIndex:40] stringByAppendingString:@"..."];
-    }
+
     return prompt;
 }
 
 - (void)tableViewSelectionDidChange:(NSNotification *)notification {
+
     NSInteger row = self.historyTable.selectedRow;
     if (row < 0 || row >= self.history.count) return;
 
     NSDictionary *entry = self.history[row];
+
     self.promptField.stringValue = entry[@"prompt"] ?: @"";
     self.resultView.string = entry[@"response"] ?: @"";
     self.modelField.stringValue = entry[@"model"] ?: @"gpt-4o-mini";
     self.temperatureField.stringValue = entry[@"temperature"] ?: @"0.7";
     self.maxTokensField.stringValue = entry[@"max_tokens"] ?: @"512";
     self.systemMessageField.stringValue = entry[@"system"] ?: @"あなたは有能なアシスタントです。";
-}
-
-- (void)controlTextDidBeginEditing:(NSNotification *)obj {
-    if (obj.object == self.apiKeyField) {
-        self.apiKeyField.stringValue = @"";
-    }
 }
 
 @end
